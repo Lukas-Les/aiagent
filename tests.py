@@ -1,8 +1,9 @@
-from functions.get_files_info import get_file_content
+from functions.run_python import run_python_file
 
 def test_get_files_info():
-    print(get_file_content("calculator", "main.py"))
-    print(get_file_content("calculator", "pkg/calculator.py"))
-    print(get_file_content("calculator", "/bin/cat"))
+    print(run_python_file("calculator", "main.py"))
+    print(run_python_file("calculator", "tests.py"))
+    print(run_python_file("calculator", "../main.py"))
+    print(run_python_file("calculator", "nonexistent.py"))
 
 test_get_files_info()
