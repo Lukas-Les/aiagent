@@ -1,9 +1,13 @@
 import os
 import sys
 
+from enum import Enum
+
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+
+from functions import get_files_info, run_python
 
 load_dotenv()
 
@@ -14,6 +18,9 @@ You are a helpful AI coding agent.
 When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
 
 - List files and directories
+- Read file contents
+- Execute Python files with optional arguments
+- Write or overwrite files
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
@@ -43,11 +50,101 @@ schema_get_files_info = types.FunctionDeclaration(
     ),
 )
 
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="gets a file content.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path of the file to read contents from, relative to the working directory.",
+            ),
+        },
+    ),
+)
+
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="executes a provided python file.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path of the file to execute, relative to the working directory.",
+            ),
+        },
+    ),
+)
+
+schema_write_file = types.FunctionDeclaration(
+    name="write_file",
+    description="writes content to a file.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path of the file to write to.",
+            ),
+            "content": types.Schema(
+                type=types.Type.STRING,
+                description="Content to write to a file",
+            ),
+        },
+    ),
+)
 available_functions = types.Tool(
     function_declarations=[
         schema_get_files_info,
+        schema_get_file_content,
+        schema_run_python_file,
+        schema_write_file,
     ]
 )
+
+
+functions = {
+    "get_files_info": get_files_info.get_files_info,
+    "get_file_content": get_files_info.get_file_content,
+    "run_python_file": run_python.run_python_file,
+    "write_file": get_files_info.write_file,
+}
+
+working_directory = "./calculator"
+
+
+def call_function(function_call_part: types.FunctionCall, verbose: bool=False) -> types.Content:
+    assert function_call_part.name is not None
+    if verbose:
+        print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+    else:
+        print(f" - Calling function: {function_call_part.name}")
+    if not (func_to_call := functions.get(function_call_part.name)):
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_call_part.name,
+                    response={"error": f"Unknown function: {function_call_part.name}"},
+                )
+            ],
+        )
+    if function_call_part.args:
+        result = func_to_call(working_directory=working_directory, **function_call_part.args)
+    else:
+        result = func_to_call(working_directory)
+    return types.Content(
+        role="tool",
+        parts=[
+            types.Part.from_function_response(
+                name=function_call_part.name,
+                response={"result": result},
+            )
+        ],
+    )
 
 
 messages = [
@@ -61,7 +158,11 @@ prompt_tokens = response.usage_metadata.prompt_token_count
 response_tokens = response.usage_metadata.candidates_token_count
 if response.function_calls:
     for f_call in response.function_calls:
-        print(f"Calling function: {f_call.name}({f_call.args})")
+        result = call_function(function_call_part=f_call, verbose=is_verbose)
+        if not result or not (response := result.parts[0].function_response.response):
+            raise Exception("response not found!")
+        if is_verbose:
+            print(f"-> {result.parts[0].function_response.response['result']}")
 else:
     print(response.text)
 if is_verbose:
