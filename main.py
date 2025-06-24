@@ -22,6 +22,7 @@ When a user asks a question or makes a request, make a function call plan. You c
 - Execute Python files with optional arguments
 - Write or overwrite files
 
+If you are asked to "fix bug", or "make something" you can write code if needed.
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
 
@@ -153,9 +154,9 @@ messages = [
 i = 0
 final_response = None
 while i <= 20:
-    # prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
+    i += 1
     response = client.models.generate_content(
-        model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=[system_prompt])
+        model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=system_prompt)
     )
     if response.candidates:
         for candidate in response.candidates:
@@ -165,7 +166,7 @@ while i <= 20:
         for f_call in response.function_calls:
             result = call_function(function_call_part=f_call, verbose=is_verbose)
             messages.append(result)
-            if not result or not (response := result.parts[0].function_response.response):  # type: ignore
+            if not result or not result.parts[0].function_response.response:  # type: ignore
                 raise Exception("response not found!")
             if is_verbose:
                 print(f"-> {result.parts[0].function_response.response['result']}")  # type: ignore
