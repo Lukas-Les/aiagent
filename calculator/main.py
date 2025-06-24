@@ -1,3 +1,5 @@
+with open('output.txt', 'w') as f:
+    f.write(str(3 + 7 * 2))
 import sys
 from pkg.calculator import Calculator
 from pkg.render import render
