@@ -146,26 +146,35 @@ def call_function(function_call_part: types.FunctionCall, verbose: bool=False) -
         ],
     )
 
-
 messages = [
     types.Content(role="user", parts=[types.Part(text=prompt)]),
 ]
-# prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
-response = client.models.generate_content(
-    model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=[system_prompt])
-)
-prompt_tokens = response.usage_metadata.prompt_token_count
-response_tokens = response.usage_metadata.candidates_token_count
-if response.function_calls:
-    for f_call in response.function_calls:
-        result = call_function(function_call_part=f_call, verbose=is_verbose)
-        if not result or not (response := result.parts[0].function_response.response):
-            raise Exception("response not found!")
-        if is_verbose:
-            print(f"-> {result.parts[0].function_response.response['result']}")
-else:
-    print(response.text)
+
+i = 0
+final_response = None
+while i <= 20:
+    # prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
+    response = client.models.generate_content(
+        model='gemini-2.0-flash-001', contents=messages, config=types.GenerateContentConfig(tools=[available_functions], system_instruction=[system_prompt])
+    )
+    if response.candidates:
+        for candidate in response.candidates:
+            if candidate.content:
+                messages.append(candidate.content)
+    if response.function_calls:
+        for f_call in response.function_calls:
+            result = call_function(function_call_part=f_call, verbose=is_verbose)
+            messages.append(result)
+            if not result or not (response := result.parts[0].function_response.response):  # type: ignore
+                raise Exception("response not found!")
+            if is_verbose:
+                print(f"-> {result.parts[0].function_response.response['result']}")  # type: ignore
+    else:
+        final_response = response
+        break
+assert final_response is not None
+print(final_response.text)
 if is_verbose:
     print(f"User prompt: {prompt}")
-    print(f"Prompt tokens: {prompt_tokens}")
-    print(f"Response tokens: {response_tokens}")
+    print(f"Prompt tokens: {final_response.usage_metadata.prompt_token_count}")
+    print(f"Response tokens: {final_response.usage_metadata.candidates_token_count}")
